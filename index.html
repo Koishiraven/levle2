@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 写作伴侣 - 从创意碎片到故事大纲</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&display=swap');
+
+        :root {
+            --board-size: 4000px;
+            --paper-texture: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.08'/%3E%3C/svg%3E");
+        }
+
+        body, html {
+            margin: 0; padding: 0;
+            width: 100vw; height: 100vh;
+            overflow: hidden; background: #121212;
+            user-select: none;
+        }
+
+        /* 整个背景大画板 - 极致 CSS 木纹方案 */
+        .board-container {
+            position: absolute;
+            width: var(--board-size);
+            height: var(--board-size);
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: #121212;
+            cursor: grab;
+            z-index: 1;
+            will-change: transform;
+        }
+
+        /* 专门的木纹质感层 */
+        .wood-texture {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: #8b5a2b; 
+            background-image: 
+                radial-gradient(circle at center, transparent 0%, rgba(0,0,0,0.4) 100%),
+                radial-gradient(ellipse at 20% 30%, rgba(60,30,10,0.3) 0%, transparent 150px),
+                radial-gradient(ellipse at 80% 70%, rgba(60,30,10,0.3) 0%, transparent 200px),
+                repeating-linear-gradient(45deg, rgba(0,0,0,0.3) 0px, rgba(0,0,0,0.3) 2px, transparent 2px, transparent 300px),
+                repeating-linear-gradient(45deg, transparent 0px, transparent 2px, rgba(255,255,255,0.08) 3px, transparent 4px, transparent 300px),
+                repeating-linear-gradient(45deg, rgba(40,20,5,0.1) 0px, rgba(40,20,5,0.1) 1px, transparent 1px, transparent 10px),
+                linear-gradient(135deg, rgba(255,255,255,0.05) 0%, transparent 50%, rgba(0,0,0,0.1) 100%);
+            background-size: 100% 100%;
+            filter: url('#wood-filter'); 
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        .board-vignette {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle at center, transparent 20%, rgba(0,0,0,0.3) 100%);
+            z-index: 2;
+            pointer-events: none;
+        }
+
+        .board-container:active { cursor: grabbing; }
+
+        /* 线索卡片 */
+        .clue-card {
+            position: absolute;
+            width: 300px;
+            padding: 25px;
+            background-color: #fdfdfd;
+            background-image: var(--paper-texture);
+            box-shadow: 
+                0 1px 2px rgba(0,0,0,0.2),
+                0 10px 30px rgba(0,0,0,0.3),
+                inset 0 0 50px rgba(0,0,0,0.02);
+            transition: transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.2s ease;
+            transform-origin: center;
+            z-index: 10;
+            cursor: move;
+            border: 1px solid rgba(0,0,0,0.08);
+        }
+
+        .clue-card::after {
+            content: "";
+            position: absolute;
+            bottom: 0; right: 0; width: 40px; height: 10px;
+            background: rgba(0,0,0,0.1);
+            filter: blur(5px);
+            transform: rotate(3deg) translate(5px, 5px);
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        /* 3D 大头钉 */
+        .pushpin {
+            position: absolute;
+            top: 10px; left: 50%;
+            transform: translateX(-50%);
+            width: 22px; height: 22px;
+            border-radius: 50%;
+            z-index: 25;
+            box-shadow: 
+                0 3px 6px rgba(0,0,0,0.4),
+                inset 0 -4px 6px rgba(0,0,0,0.3),
+                inset 0 3px 4px rgba(255,255,255,0.7);
+        }
+
+        .pushpin-shine {
+            position: absolute;
+            top: 4px; left: 5px;
+            width: 6px; height: 6px;
+            background: rgba(255,255,255,0.8);
+            border-radius: 50%;
+            filter: blur(1px);
+        }
+
+        .pin-red { background: radial-gradient(circle at 35% 35%, #ff4d4d, #8b0000); }
+        .pin-blue { background: radial-gradient(circle at 35% 35%, #4d94ff, #002b80); }
+        .pin-silver { background: radial-gradient(circle at 35% 35%, #f2f2f2, #4d4d4d); }
+        .pin-yellow { background: radial-gradient(circle at 35% 35%, #ffd633, #806600); }
+
+        .clue-card.active {
+            z-index: 1000 !important;
+            box-shadow: 
+                0 15px 40px rgba(0,0,0,0.4),
+                0 30px 80px rgba(0,0,0,0.5);
+        }
+
+        .hero-card { 
+            width: 500px; background-color: #fefcf0; z-index: 20; 
+            border: 1px solid #e0d9b5;
+        }
+
+        .handwritten { font-family: 'Kalam', cursive; line-height: 1.4; }
+
+        .ui-hint {
+            position: fixed;
+            top: 25px; left: 50%;
+            transform: translateX(-50%);
+            background: rgba(20,20,20,0.85);
+            color: #e0e0e0;
+            padding: 12px 35px;
+            border-radius: 50px;
+            font-size: 14px;
+            z-index: 200;
+            pointer-events: none;
+            box-shadow: 0 5px 25px rgba(0,0,0,0.3);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .card-y { background-color: #fffde7; }
+        .card-b { background-color: #e3f2fd; }
+        .card-g { background-color: #f1f8e9; }
+        .card-p { background-color: #fce4ec; }
+        .card-o { background-color: #fff3e0; }
+
+        .svg-filters { position: absolute; width: 0; height: 0; visibility: hidden; }
+
+        /* 图片卡片样式 */
+        .image-card img {
+            width: 100%;
+            height: auto;
+            border: 1px solid rgba(0,0,0,0.05);
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <svg class="svg-filters">
+        <filter id="wood-filter">
+            <feTurbulence type="fractalNoise" baseFrequency="0.015 0.002" numOctaves="3" seed="5" result="noise" />
+            <feDisplacementMap in="SourceGraphic" in2="noise" scale="25" xChannelSelector="R" yChannelSelector="G" />
+        </filter>
+    </svg>
+
+    <div class="ui-hint handwritten">
+        ✨ 欢迎来到 <b>AI 写作伴侣</b> | 拖拽背景平移 | 滚轮缩放 | 整理你的创意碎片
+    </div>
+
+    <div id="board" class="board-container">
+        <div class="wood-texture"></div>
+        <div class="board-vignette"></div>
+        
+        <!-- Hero Card -->
+        <div id="hero" class="clue-card hero-card" style="top: 1850px; left: 1750px;">
+            <div class="pushpin pin-red"><div class="pushpin-shine"></div></div>
+            <div class="text-center p-6">
+                <h1 class="text-4xl font-bold mb-4 handwritten text-red-900">AI 写作伴侣</h1>
+                <p class="text-xl text-gray-800 mb-8 handwritten">
+                    "帮脑子里已有故事世界的人，<br>把散落的创意碎片，自动编织成大纲。"
+                </p>
+                <div class="space-y-4">
+                    <button class="w-full bg-red-900 text-white px-10 py-4 rounded-sm font-bold handwritten hover:bg-black transition-all shadow-xl text-lg">
+                        开始我的故事调查 →
+                    </button>
+                    <p class="text-sm text-gray-500 handwritten">无需注册，即刻整理碎片</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const board = document.getElementById('board');
+        let isDraggingBoard = false;
+        let isDraggingCard = false;
+        let activeCard = null;
+        let startX, startY;
+        let currentX = 0, currentY = 0;
+        let cardOffsetX, cardOffsetY;
+        let currentScale = 1.0;
+        let highestZIndex = 100;
+        const MIN_SCALE = 0.2;
+        const MAX_SCALE = 3.0;
+
+        // 核心功能卡片
+        const featureCards = [
+            { id: 'f1', title: '📂 无限线索画布', content: '像侦探一样自由放置角色、场景、设定卡片。缩放调整重要性，拖拽理清逻辑。', color: 'card-b', x: 1400, y: 1600, pin: 'pin-blue' },
+            { id: 'f2', title: '🧺 创意篮子机制', content: '将散落的碎片拖入篮子，AI 将基于你的选择，自动寻找它们之间的隐秘联系。', color: 'card-g', x: 2150, y: 1550, pin: 'pin-silver' },
+            { id: 'f3', title: '⚡ 情节微调面板', content: '一句话描述想要的感觉（"让相遇尴尬一点"），AI 实时生成符合你直觉的情节片段。', color: 'card-y', x: 2300, y: 2100, pin: 'pin-yellow' },
+            { id: 'f4', title: '📜 时间参考线', content: '贯穿左右的参考线，助你本能地按时间顺序排布“过去”与“未来”的高光时刻。', color: 'card-p', x: 1600, y: 2200, pin: 'pin-red' }
+        ];
+
+        // 商业与 FAQ 卡片
+        const infoCards = [
+            { id: 'pricing', title: '🕵️ 订阅报酬', content: '<b>见习生 (Free):</b> 无限画布，每月 5 次 AI 编织。<br><b>传奇探长 (Pro):</b> ¥99/月，无限 AI 编织，导出高清故事板。', color: 'card-o', x: 1300, y: 2000, pin: 'pin-silver' },
+            { id: 'faq-1', title: 'Q: AI 会抢走我的创意吗？', content: 'A: 绝不。我们只负责“整理”你的点子。每一张卡片、每一个转折的灵魂都源于你的直觉。', color: 'card-y', x: 1800, y: 1350, pin: 'pin-yellow' },
+            { id: 'faq-2', title: 'Q: 生成的内容能导出吗？', content: 'A: 当然。支持一键导出为标准的叙事大纲或章节草稿，无缝衔接你的写作软件。', color: 'card-b', x: 2600, y: 1800, pin: 'pin-blue' }
+        ];
+
+        // 装饰性素材图片 (作为灵感参考)
+        const imageFiles = [
+            '微信图片_20260226115600_7_4.jpg',
+            '微信图片_20260226115600_8_4.jpg',
+            '微信图片_20260226115601_9_4.jpg',
+            '微信图片_20260226115602_10_4.jpg',
+            '微信图片_20260226115603_11_4.jpg',
+            '微信图片_20260226115604_12_4.jpg'
+        ];
+
+        function init() {
+            // 初始化 Hero
+            const hero = document.getElementById('hero');
+            setupCardDragging(hero);
+
+            // 初始化功能卡片
+            featureCards.forEach(data => {
+                const el = createCard(data.id, data.x, data.y, data.pin, `
+                    <h3 class="text-xl font-bold mb-2 handwritten">${data.title}</h3>
+                    <p class="text-md text-gray-700 handwritten">${data.content}</p>
+                `, data.color);
+                setupCardDragging(el);
+            });
+
+            // 初始化信息卡片
+            infoCards.forEach(data => {
+                const el = createCard(data.id, data.x, data.y, data.pin, `
+                    <h3 class="text-lg font-bold mb-2 handwritten">${data.title}</h3>
+                    <div class="text-sm text-gray-600 handwritten">${data.content}</div>
+                `, data.color);
+                setupCardDragging(el);
+            });
+
+            // 初始化素材图片
+            imageFiles.forEach((file, i) => {
+                const angle = (i / imageFiles.length) * Math.PI * 2;
+                const r = 900 + Math.random() * 200;
+                const x = 2000 + Math.cos(angle) * r;
+                const y = 2000 + Math.sin(angle) * r;
+                const pins = ['pin-red', 'pin-blue', 'pin-silver', 'pin-yellow'];
+                const el = createCard(`img-${i}`, x, y, pins[i % 4], `
+                    <img src="${file}" draggable="false" class="rounded-sm opacity-90">
+                    <p class="mt-2 text-xs text-center text-gray-400 handwritten">灵感素材 #${i + 7}</p>
+                `, 'p-3 w-64 image-card');
+                setupCardDragging(el);
+            });
+
+            // Footer 卡片
+            const footer = createCard('footer', 2000, 2600, 'pin-silver', `
+                <div class="text-center">
+                    <h3 class="text-lg font-bold mb-2 handwritten">AI 写作伴侣</h3>
+                    <p class="text-xs text-gray-500 handwritten mb-4">帮助每一个脑内剧场落地的故事工厂</p>
+                    <div class="flex justify-center gap-4 text-xl text-gray-400 mb-4">
+                        <i class="fab fa-twitter hover:text-blue-400 transition cursor-pointer"></i>
+                        <i class="fab fa-discord hover:text-indigo-500 transition cursor-pointer"></i>
+                        <i class="fab fa-github hover:text-black transition cursor-pointer"></i>
+                    </div>
+                    <p class="text-[10px] text-gray-300">© 2026 AI Writing Companion. <br>Designed for Storytellers.</p>
+                </div>
+            `, 'card-o w-64');
+            setupCardDragging(footer);
+
+            updateTransform();
+        }
+
+        function createCard(id, x, y, pinClass, html, extraClass) {
+            const el = document.createElement('div');
+            el.id = id;
+            el.className = `clue-card ${extraClass}`;
+            el.style.top = `${y}px`;
+            el.style.left = `${x}px`;
+            el.dataset.rotation = (Math.random() - 0.5) * 15;
+            updateCardTransform(el);
+            el.innerHTML = `<div class="pushpin ${pinClass}"><div class="pushpin-shine"></div></div>${html}`;
+            board.appendChild(el);
+            return el;
+        }
+
+        function setupCardDragging(el) {
+            el.addEventListener('mousedown', (e) => {
+                e.stopPropagation();
+                isDraggingCard = true;
+                activeCard = el;
+                highestZIndex++;
+                el.style.zIndex = highestZIndex;
+                const rect = el.getBoundingClientRect();
+                cardOffsetX = (e.clientX - rect.left) / currentScale;
+                cardOffsetY = (e.clientY - rect.top) / currentScale;
+                el.style.transition = 'none';
+            });
+        }
+
+        function updateCardTransform(el) {
+            const rotation = el.dataset.rotation || 0;
+            const isFocused = el.classList.contains('active');
+            const scale = isFocused ? 1.18 : 1.0;
+            const finalRotation = isFocused ? 0 : rotation;
+            el.style.transform = `rotate(${finalRotation}deg) scale(${scale})`;
+        }
+
+        function updateTransform() {
+            board.style.transform = `translate(calc(-50% + ${currentX}px), calc(-50% + ${currentY}px)) scale(${currentScale})`;
+            checkFocus();
+        }
+
+        window.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const zoomSpeed = 0.001;
+            currentScale = Math.min(Math.max(currentScale - e.deltaY * zoomSpeed, MIN_SCALE), MAX_SCALE);
+            updateTransform();
+        }, { passive: false });
+
+        window.addEventListener('mousedown', (e) => {
+            isDraggingBoard = true;
+            startX = e.clientX - currentX;
+            startY = e.clientY - currentY;
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (isDraggingBoard) {
+                currentX = e.clientX - startX;
+                currentY = e.clientY - startY;
+                updateTransform();
+            } else if (isDraggingCard && activeCard) {
+                const bRect = board.getBoundingClientRect();
+                activeCard.style.left = `${(e.clientX - bRect.left) / currentScale - cardOffsetX}px`;
+                activeCard.style.top = `${(e.clientY - bRect.top) / currentScale - cardOffsetY}px`;
+                updateCardTransform(activeCard);
+                checkFocus();
+            }
+        });
+
+        window.addEventListener('mouseup', () => {
+            if (activeCard) {
+                activeCard.style.transition = 'transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.2s ease';
+            }
+            isDraggingBoard = isDraggingCard = false;
+            activeCard = null;
+        });
+
+        function checkFocus() {
+            const cx = window.innerWidth / 2, cy = window.innerHeight / 2;
+            document.querySelectorAll('.clue-card').forEach(card => {
+                const r = card.getBoundingClientRect();
+                const dist = Math.sqrt(Math.pow(r.left + r.width/2 - cx, 2) + Math.pow(r.top + r.height/2 - cy, 2));
+                const wasActive = card.classList.contains('active');
+                const isActive = dist < 200 * currentScale;
+                if (wasActive !== isActive) {
+                    card.classList.toggle('active', isActive);
+                    updateCardTransform(card);
+                }
+            });
+        }
+
+        init();
+        window.addEventListener('resize', updateTransform);
+    </script>
+</body>
+</html>
