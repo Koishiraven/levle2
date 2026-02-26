@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 写作伴侣 - 从创意碎片到故事大纲</title>
+    <title>AI 写作伴侣 - 平行视觉世界</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
@@ -11,85 +11,243 @@
 
         :root {
             --board-size: 4000px;
+            /* 基础纸张纹理 */
             --paper-texture: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.08'/%3E%3C/svg%3E");
+            
+            /* 默认：暖阳书桌变量 */
+            --bg-color: #eaddca;
+            --wood-base: #d2b48c;
+            --accent-color: #8b4513;
+            --card-bg: rgba(253, 253, 253, 0.95);
+            --neon-glow: transparent;
+            --ui-panel-bg: rgba(255, 255, 255, 0.8);
+            --ui-text: #333;
+            --spotlight-opacity: 0.08; /* 调暗聚光灯，让明暗变化更柔和 */
+            --coffee-opacity: 0.3;
+        }
+
+        /* 赛博侦探模式变量 */
+        [data-theme="cyber"] {
+            --bg-color: #050507;
+            --wood-base: #101012;
+            --accent-color: #00ffff; /* 更鲜艳的青色 */
+            --card-bg: rgba(15, 15, 20, 0.85);
+            --neon-glow: 0 0 20px rgba(0, 255, 255, 0.6), 0 0 40px rgba(0, 255, 255, 0.2); /* 增强霓虹感 */
+            --ui-panel-bg: rgba(5, 5, 10, 0.95);
+            --ui-text: #00ffff;
+            --spotlight-opacity: 0.3;
+            --coffee-opacity: 0;
         }
 
         body, html {
             margin: 0; padding: 0;
             width: 100vw; height: 100vh;
-            overflow: hidden; background: #121212;
+            overflow: hidden; background: var(--bg-color);
             user-select: none;
+            transition: background 0.8s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
-        /* 整个背景大画板 - 极致 CSS 木纹方案 */
+        /* 动态光影层 */
+        #spotlight {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: 500;
+            /* 聚光灯改为更平滑的渐变 */
+            background: radial-gradient(circle 500px at var(--mouse-x, 50%) var(--mouse-y, 50%), transparent 0%, rgba(0,0,0, var(--spotlight-opacity)) 100%);
+            transition: background 0.5s ease;
+        }
+
         .board-container {
             position: absolute;
             width: var(--board-size);
             height: var(--board-size);
             top: 50%; left: 50%;
             transform: translate(-50%, -50%);
-            background-color: #121212;
             cursor: grab;
             z-index: 1;
             will-change: transform;
         }
 
-        /* 专门的木纹质感层 */
+        /* 木纹质感层 */
         .wood-texture {
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
-            background-color: #8b5a2b; 
+            background-color: var(--wood-base);
             background-image: 
-                radial-gradient(circle at center, transparent 0%, rgba(0,0,0,0.4) 100%),
-                radial-gradient(ellipse at 20% 30%, rgba(60,30,10,0.3) 0%, transparent 150px),
-                radial-gradient(ellipse at 80% 70%, rgba(60,30,10,0.3) 0%, transparent 200px),
-                repeating-linear-gradient(45deg, rgba(0,0,0,0.3) 0px, rgba(0,0,0,0.3) 2px, transparent 2px, transparent 300px),
-                repeating-linear-gradient(45deg, transparent 0px, transparent 2px, rgba(255,255,255,0.08) 3px, transparent 4px, transparent 300px),
-                repeating-linear-gradient(45deg, rgba(40,20,5,0.1) 0px, rgba(40,20,5,0.1) 1px, transparent 1px, transparent 10px),
-                linear-gradient(135deg, rgba(255,255,255,0.05) 0%, transparent 50%, rgba(0,0,0,0.1) 100%);
-            background-size: 100% 100%;
+                radial-gradient(circle at center, transparent 0%, rgba(0,0,0,0.15) 100%),
+                repeating-linear-gradient(45deg, rgba(0,0,0,0.08) 0px, rgba(0,0,0,0.08) 2px, transparent 2px, transparent 300px),
+                repeating-linear-gradient(45deg, rgba(0,0,0,0.03) 0px, rgba(0,0,0,0.03) 1px, transparent 1px, transparent 15px);
             filter: url('#wood-filter'); 
+            transition: background-color 0.8s ease;
             z-index: 1;
             pointer-events: none;
         }
 
-        .board-vignette {
+        /* 暖阳专属：咖啡渍 */
+        .coffee-stains {
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
-            background: radial-gradient(circle at center, transparent 20%, rgba(0,0,0,0.3) 100%);
-            z-index: 2;
-            pointer-events: none;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 1000 1000' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='coffee'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.01' numOctaves='3'/%3E%3CfeColorMatrix values='0 0 0 0 0.5 0 0 0 0 0.3 0 0 0 0 0.1 0 0 0 1 0'/%3E%3C/filter%3E%3Ccircle cx='200' cy='300' r='100' filter='url(%23coffee)' opacity='0.1'/%3E%3Ccircle cx='800' cy='700' r='150' filter='url(%23coffee)' opacity='0.08'/%3E%3C/svg%3E");
+            z-index: 1;
+            opacity: var(--coffee-opacity);
+            transition: opacity 0.8s ease;
         }
 
-        .board-container:active { cursor: grabbing; }
+        /* 暖阳专属：百叶窗光影层（优化质感与方向） */
+        .blinds-shadow {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            /* 使用多重渐变模拟带有柔和边缘的自然光线，方向调整为更自然的斜下 35 度 */
+            background: repeating-linear-gradient(
+                125deg,
+                rgba(0,0,0,0.12) 0px,
+                rgba(0,0,0,0.06) 15px,
+                transparent 45px,
+                transparent 90px
+            );
+            z-index: 2;
+            pointer-events: none;
+            opacity: 1;
+            transition: opacity 0.8s ease;
+        }
+        [data-theme="cyber"] .blinds-shadow { opacity: 0; }
+
+        /* 赛博专属：抖动电光与蜂巢残留效果 */
+        @keyframes lightning-move {
+            0% { transform: translate(-100%, -100%) rotate(-30deg); }
+            100% { transform: translate(150%, 150%) rotate(-30deg); }
+        }
+
+        @keyframes lightning-jitter {
+            0%, 100% { opacity: 0.8; transform: scaleY(1) translateX(0); }
+            20% { opacity: 1; transform: scaleY(1.2) translateX(2px); }
+            40% { opacity: 0.9; transform: scaleY(0.9) translateX(-2px); }
+            60% { opacity: 1; transform: scaleY(1.1) translateX(1px); }
+            80% { opacity: 0.8; transform: scaleY(1) translateX(-1px); }
+        }
+
+        .scanline {
+            position: fixed;
+            top: -50%; left: -50%; width: 200%; height: 15px;
+            background: #fff; /* 核心高亮为白色，模拟闪电 */
+            box-shadow: 
+                0 0 20px #fff,
+                0 0 40px var(--accent-color),
+                0 0 80px var(--accent-color);
+            z-index: 600;
+            pointer-events: none;
+            opacity: 0;
+            transform-origin: center;
+            /* 使用 CSS 变量驱动位置，配合 JS 实现蜂巢残留 */
+            --scan-offset: -100%;
+            transform: translate(var(--scan-offset), var(--scan-offset)) rotate(-30deg);
+        }
+        
+        [data-theme="cyber"] .scanline { 
+            opacity: 1; 
+            animation: lightning-jitter 0.1s infinite;
+        }
+
+        /* 蜂巢痕迹层 */
+        .honeycomb-trail {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 595;
+            pointer-events: none;
+            opacity: 0;
+            /* 蜂巢背景图案 */
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='100' viewBox='0 0 56 100'%3E%3Cpath d='M28 66L0 50L0 16L28 0L56 16L56 50L28 66L28 100' fill='none' stroke='%2300ffff' stroke-width='1' opacity='0.5'/%3E%3C/svg%3E");
+            background-size: 28px 50px;
+            /* 使用 mask 实现跟随闪电的残留效果 */
+            mask-image: linear-gradient(120deg, 
+                transparent 0%, 
+                transparent calc(var(--mask-pos) - 25%), 
+                rgba(0,0,0,0.1) calc(var(--mask-pos) - 20%), 
+                black calc(var(--mask-pos) - 5%), 
+                black var(--mask-pos), 
+                transparent var(--mask-pos)
+            );
+            -webkit-mask-image: linear-gradient(120deg, 
+                transparent 0%, 
+                transparent calc(var(--mask-pos) - 25%), 
+                rgba(0,0,0,0.1) calc(var(--mask-pos) - 20%), 
+                black calc(var(--mask-pos) - 5%), 
+                black var(--mask-pos), 
+                transparent var(--mask-pos)
+            );
+            transition: opacity 0.3s ease;
+        }
+        [data-theme="cyber"] .honeycomb-trail { opacity: 0.6; }
+
+        /* 赛博专属：故障毛刺效果层 */
+        .cyber-glitch {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: repeating-linear-gradient(
+                0deg,
+                rgba(0, 255, 255, 0.03) 0px,
+                rgba(0, 255, 255, 0.03) 1px,
+                transparent 1px,
+                transparent 2px
+            );
+            z-index: 590;
+            pointer-events: none;
+            opacity: 0;
+        }
+        [data-theme="cyber"] .cyber-glitch { opacity: 1; }
+
+        /* 赛博专属：数字网格 */
+        .cyber-grid {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-image: 
+                linear-gradient(rgba(0, 255, 255, 0.08) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 255, 255, 0.08) 1px, transparent 1px);
+            background-size: 80px 80px;
+            z-index: 2;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.8s ease;
+        }
+        [data-theme="cyber"] .cyber-grid { opacity: 1; }
 
         /* 线索卡片 */
         .clue-card {
             position: absolute;
             width: 300px;
             padding: 25px;
-            background-color: #fdfdfd;
+            background-color: var(--card-bg);
             background-image: var(--paper-texture);
+            backdrop-filter: blur(12px);
             box-shadow: 
-                0 1px 2px rgba(0,0,0,0.2),
-                0 10px 30px rgba(0,0,0,0.3),
-                inset 0 0 50px rgba(0,0,0,0.02);
-            transition: transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.2s ease;
+                0 15px 45px rgba(0,0,0,0.15),
+                var(--neon-glow);
+            transition: 
+                transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275), 
+                box-shadow 0.4s ease,
+                background-color 0.8s ease,
+                border-color 0.8s ease;
             transform-origin: center;
             z-index: 10;
             cursor: move;
-            border: 1px solid rgba(0,0,0,0.08);
+            border: 1px solid rgba(255,255,255,0.15);
         }
 
-        .clue-card::after {
-            content: "";
+        [data-theme="cyber"] .clue-card {
+            border: 1px solid rgba(0, 255, 255, 0.4);
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.2);
+            color: #f0faff;
+        }
+
+        [data-theme="cyber"] .clue-card::after {
+            content: '';
             position: absolute;
-            bottom: 0; right: 0; width: 40px; height: 10px;
-            background: rgba(0,0,0,0.1);
-            filter: blur(5px);
-            transform: rotate(3deg) translate(5px, 5px);
-            z-index: -1;
+            top: 0; left: 0; right: 0; bottom: 0;
+            border: 1px solid var(--accent-color);
+            opacity: 0.3;
             pointer-events: none;
+            box-shadow: inset 0 0 10px var(--accent-color);
         }
 
         /* 3D 大头钉 */
@@ -100,10 +258,12 @@
             width: 22px; height: 22px;
             border-radius: 50%;
             z-index: 25;
-            box-shadow: 
-                0 3px 6px rgba(0,0,0,0.4),
-                inset 0 -4px 6px rgba(0,0,0,0.3),
-                inset 0 3px 4px rgba(255,255,255,0.7);
+            box-shadow: 0 3px 6px rgba(0,0,0,0.4);
+            transition: filter 0.8s ease;
+        }
+        [data-theme="cyber"] .pushpin {
+            filter: hue-rotate(180deg) brightness(1.5);
+            box-shadow: 0 0 10px var(--accent-color);
         }
 
         .pushpin-shine {
@@ -112,125 +272,329 @@
             width: 6px; height: 6px;
             background: rgba(255,255,255,0.8);
             border-radius: 50%;
-            filter: blur(1px);
         }
 
         .pin-red { background: radial-gradient(circle at 35% 35%, #ff4d4d, #8b0000); }
         .pin-blue { background: radial-gradient(circle at 35% 35%, #4d94ff, #002b80); }
-        .pin-silver { background: radial-gradient(circle at 35% 35%, #f2f2f2, #4d4d4d); }
-        .pin-yellow { background: radial-gradient(circle at 35% 35%, #ffd633, #806600); }
 
+        /* 聚焦放大状态 */
         .clue-card.active {
             z-index: 1000 !important;
-            box-shadow: 
-                0 15px 40px rgba(0,0,0,0.4),
-                0 30px 80px rgba(0,0,0,0.5);
+            box-shadow: 0 20px 50px rgba(0,0,0,0.4), var(--neon-glow);
         }
 
-        .hero-card { 
-            width: 500px; background-color: #fefcf0; z-index: 20; 
-            border: 1px solid #e0d9b5;
+        .handwritten { font-family: 'Kalam', cursive; }
+
+        /* 风格切换开关 */
+        .theme-switch {
+            position: fixed;
+            top: 25px; right: 25px;
+            z-index: 1000;
+            background: var(--ui-panel-bg);
+            backdrop-filter: blur(15px);
+            padding: 8px;
+            border-radius: 40px;
+            border: 1px solid rgba(255,255,255,0.2);
+            display: flex;
+            gap: 5px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.2);
         }
 
-        .handwritten { font-family: 'Kalam', cursive; line-height: 1.4; }
+        .switch-btn {
+            padding: 8px 20px;
+            border-radius: 30px;
+            font-size: 13px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            color: var(--ui-text);
+        }
 
+        .switch-btn.active {
+            background: var(--accent-color);
+            color: white;
+        }
+
+        /* 提示面板 */
         .ui-hint {
             position: fixed;
             top: 25px; left: 50%;
             transform: translateX(-50%);
-            background: rgba(20,20,20,0.85);
-            color: #e0e0e0;
+            background: var(--ui-panel-bg);
+            color: var(--ui-text);
             padding: 12px 35px;
             border-radius: 50px;
             font-size: 14px;
             z-index: 200;
             pointer-events: none;
-            box-shadow: 0 5px 25px rgba(0,0,0,0.3);
+            box-shadow: 0 5px 25px rgba(0,0,0,0.2);
             backdrop-filter: blur(10px);
             border: 1px solid rgba(255,255,255,0.1);
+            transition: all 0.8s ease;
         }
 
-        .card-y { background-color: #fffde7; }
-        .card-b { background-color: #e3f2fd; }
-        .card-g { background-color: #f1f8e9; }
-        .card-p { background-color: #fce4ec; }
-        .card-o { background-color: #fff3e0; }
+        /* 时间参考线 */
+        .time-line {
+            position: absolute;
+            top: 50%; left: 0; width: 100%; height: 2px;
+            background: rgba(0,0,0,0.05);
+            z-index: 2;
+            pointer-events: none;
+        }
+        [data-theme="cyber"] .time-line {
+            background: linear-gradient(90deg, transparent, var(--accent-color), transparent);
+            box-shadow: 0 0 10px var(--accent-color);
+            opacity: 0.3;
+        }
+
+        .time-label {
+            position: absolute;
+            top: -25px;
+            font-size: 12px;
+            opacity: 0.4;
+            color: var(--ui-text);
+        }
+
+        /* 底部篮子 */
+        #basket {
+            position: fixed;
+            bottom: 20px; left: 50%;
+            transform: translateX(-50%);
+            width: 600px; height: 100px;
+            background: var(--ui-panel-bg);
+            backdrop-filter: blur(20px);
+            border-radius: 20px;
+            border: 1px solid rgba(255,255,255,0.2);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            gap: 15px;
+            box-shadow: 0 -10px 30px rgba(0,0,0,0.1);
+            transition: all 0.5s ease;
+        }
+        #basket::before {
+            content: "🧺 创意篮子 (拖入卡片组合情节)";
+            position: absolute;
+            top: -25px; left: 20px;
+            font-size: 12px;
+            opacity: 0.6;
+            color: var(--ui-text);
+        }
+
+        /* 右侧微调面板 */
+        #side-panel {
+            position: fixed;
+            right: 25px; top: 100px; bottom: 140px;
+            width: 300px;
+            background: var(--ui-panel-bg);
+            backdrop-filter: blur(20px);
+            border-radius: 20px;
+            border: 1px solid rgba(255,255,255,0.2);
+            z-index: 1000;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            box-shadow: -10px 0 30px rgba(0,0,0,0.1);
+            transition: all 0.5s ease;
+        }
+
+        .panel-title {
+            font-weight: bold;
+            border-bottom: 1px solid rgba(0,0,0,0.1);
+            padding-bottom: 10px;
+            margin-bottom: 5px;
+            color: var(--ui-text);
+        }
+        [data-theme="cyber"] .panel-title { border-color: rgba(0, 242, 255, 0.2); }
+
+        .input-group label {
+            display: block;
+            font-size: 12px;
+            opacity: 0.7;
+            margin-bottom: 5px;
+            color: var(--ui-text);
+        }
+        .panel-input {
+            width: 100%;
+            background: rgba(0,0,0,0.05);
+            border: 1px solid rgba(0,0,0,0.1);
+            border-radius: 8px;
+            padding: 8px;
+            font-size: 13px;
+            color: var(--ui-text);
+            outline: none;
+        }
+        [data-theme="cyber"] .panel-input {
+            background: rgba(0, 242, 255, 0.05);
+            border-color: rgba(0, 242, 255, 0.2);
+        }
+
+        .generate-btn {
+            margin-top: auto;
+            background: var(--accent-color);
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 10px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+        .generate-btn:active { transform: scale(0.95); }
 
         .svg-filters { position: absolute; width: 0; height: 0; visibility: hidden; }
-
-        /* 图片卡片样式 */
-        .image-card img {
-            width: 100%;
-            height: auto;
-            border: 1px solid rgba(0,0,0,0.05);
-            margin-bottom: 10px;
-        }
     </style>
 </head>
-<body>
+<body data-theme="warm">
 
     <svg class="svg-filters">
         <filter id="wood-filter">
             <feTurbulence type="fractalNoise" baseFrequency="0.015 0.002" numOctaves="3" seed="5" result="noise" />
-            <feDisplacementMap in="SourceGraphic" in2="noise" scale="25" xChannelSelector="R" yChannelSelector="G" />
+            <feDisplacementMap in="SourceGraphic" in2="noise" scale="20" xChannelSelector="R" yChannelSelector="G" />
         </filter>
     </svg>
 
+    <!-- 动态光效层 -->
+    <div id="spotlight"></div>
+    <div class="scanline"></div>
+    <div class="honeycomb-trail"></div>
+    <div class="cyber-glitch"></div>
+
+    <!-- 风格切换 UI -->
+    <div class="theme-switch handwritten">
+        <div id="btn-warm" class="switch-btn active" onclick="setTheme('warm')">☀️ 暖阳书桌</div>
+        <div id="btn-cyber" class="switch-btn" onclick="setTheme('cyber')">🧬 赛博侦探</div>
+    </div>
+
     <div class="ui-hint handwritten">
-        ✨ 欢迎来到 <b>AI 写作伴侣</b> | 拖拽背景平移 | 滚轮缩放 | 整理你的创意碎片
+        ✨ <b>AI 写作伴侣</b> | 拖拽视野 | 滚轮缩放 | 整理你的故事灵魂
     </div>
 
     <div id="board" class="board-container">
         <div class="wood-texture"></div>
-        <div class="board-vignette"></div>
+        <div class="coffee-stains"></div>
+        <div class="blinds-shadow"></div>
+        <div class="cyber-grid"></div>
+
+        <!-- 时间参考线 -->
+        <div class="time-line">
+            <span class="time-label handwritten" style="left: 10%">1880s 过去</span>
+            <span class="time-label handwritten" style="left: 50%">PRESENT 现在</span>
+            <span class="time-label handwritten" style="left: 90%">未来 1920s</span>
+        </div>
         
         <!-- Hero Card -->
-        <div id="hero" class="clue-card hero-card" style="top: 1850px; left: 1750px;">
+        <div id="hero" class="clue-card hero-card" style="top: 1850px; left: 1750px; width: 500px;">
             <div class="pushpin pin-red"><div class="pushpin-shine"></div></div>
             <div class="text-center p-6">
-                <h1 class="text-4xl font-bold mb-4 handwritten text-red-900">AI 写作伴侣</h1>
-                <p class="text-xl text-gray-800 mb-8 handwritten">
-                    "帮脑子里已有故事世界的人，<br>把散落的创意碎片，自动编织成大纲。"
+                <h1 class="text-4xl font-bold mb-4 handwritten">AI 写作伴侣</h1>
+                <p class="text-xl opacity-90 mb-8 handwritten">
+                    "让脑海中的故事碎片，<br>在平行时空中自动编织成章。"
                 </p>
-                <div class="space-y-4">
-                    <button class="w-full bg-red-900 text-white px-10 py-4 rounded-sm font-bold handwritten hover:bg-black transition-all shadow-xl text-lg">
-                        开始我的故事调查 →
-                    </button>
-                    <p class="text-sm text-gray-500 handwritten">无需注册，即刻整理碎片</p>
-                </div>
+                <button id="cta-btn" class="w-full bg-black text-white px-10 py-4 rounded-sm font-bold handwritten transition-all shadow-xl text-lg">
+                    开启灵感调查 →
+                </button>
             </div>
         </div>
     </div>
 
+    <!-- 创意篮子 -->
+    <div id="basket" class="handwritten">
+        <!-- 动态拖入卡片将显示在这里 -->
+        <div class="flex-1 text-center opacity-30 text-sm">篮子目前是空的...</div>
+    </div>
+
+    <!-- 微调面板 -->
+    <div id="side-panel" class="handwritten">
+        <div class="panel-title">⚡ 情节微调面板</div>
+        
+        <div class="input-group">
+            <label>当前场景背景</label>
+            <input type="text" class="panel-input" placeholder="例如：伦敦街头的雨夜">
+        </div>
+
+        <div class="input-group">
+            <label>AI 启发力度</label>
+            <input type="range" class="w-full accent-amber-700" min="1" max="10" value="5">
+        </div>
+
+        <div class="input-group">
+            <label>你想要的感觉</label>
+            <textarea class="panel-input h-24" placeholder="一句话描述：让这次相遇显得既尴尬又充满宿命感..."></textarea>
+        </div>
+
+        <div class="flex flex-wrap gap-2 mt-2">
+            <button class="text-[10px] px-2 py-1 bg-gray-100 rounded hover:bg-gray-200">温馨</button>
+            <button class="text-[10px] px-2 py-1 bg-gray-100 rounded hover:bg-gray-200">悬疑</button>
+            <button class="text-[10px] px-2 py-1 bg-gray-100 rounded hover:bg-gray-200">搞笑</button>
+        </div>
+
+        <button class="generate-btn">开始编织情节 ✨</button>
+    </div>
+
     <script>
+        const body = document.body;
         const board = document.getElementById('board');
-        let isDraggingBoard = false;
-        let isDraggingCard = false;
-        let activeCard = null;
-        let startX, startY;
-        let currentX = 0, currentY = 0;
-        let cardOffsetX, cardOffsetY;
+        const MIN_SCALE = 0.3, MAX_SCALE = 2.0;
         let currentScale = 1.0;
-        let highestZIndex = 100;
-        const MIN_SCALE = 0.2;
-        const MAX_SCALE = 3.0;
+        let currentX = 0, currentY = 0;
+        let isDraggingBoard = false, isDraggingCard = false;
+        let activeCard = null, highestZIndex = 100;
+        let startX, startY, cardOffsetX, cardOffsetY;
 
-        // 核心功能卡片
+        // 鼠标位置同步（用于聚光灯效果）
+        window.addEventListener('mousemove', (e) => {
+            document.documentElement.style.setProperty('--mouse-x', `${e.clientX}px`);
+            document.documentElement.style.setProperty('--mouse-y', `${e.clientY}px`);
+        });
+
+        // 赛博闪电扫描动画逻辑
+        let scanProgress = -50;
+        function animateScanline() {
+            if (body.getAttribute('data-theme') === 'cyber') {
+                scanProgress += 0.8; // 调整移动速度
+                if (scanProgress > 150) scanProgress = -50;
+                
+                document.documentElement.style.setProperty('--scan-offset', `${scanProgress - 100}%`);
+                document.documentElement.style.setProperty('--mask-pos', `${scanProgress}%`);
+            }
+            requestAnimationFrame(animateScanline);
+        }
+        animateScanline();
+
+        // 主题切换
+        function setTheme(theme) {
+            body.setAttribute('data-theme', theme);
+            document.querySelectorAll('.switch-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(`btn-${theme}`).classList.add('active');
+            
+            // 切换按钮样式适配
+            const ctaBtn = document.getElementById('cta-btn');
+            if(theme === 'cyber') {
+                ctaBtn.style.backgroundColor = 'transparent';
+                ctaBtn.style.border = '2px solid #00f2ff';
+                ctaBtn.style.color = '#00f2ff';
+                ctaBtn.style.boxShadow = '0 0 15px rgba(0, 242, 255, 0.4)';
+            } else {
+                ctaBtn.style.backgroundColor = '#000';
+                ctaBtn.style.border = 'none';
+                ctaBtn.style.color = '#fff';
+                ctaBtn.style.boxShadow = '0 10px 20px rgba(0,0,0,0.3)';
+            }
+        }
+
+        // 数据定义
         const featureCards = [
-            { id: 'f1', title: '📂 无限线索画布', content: '像侦探一样自由放置角色、场景、设定卡片。缩放调整重要性，拖拽理清逻辑。', color: 'card-b', x: 1400, y: 1600, pin: 'pin-blue' },
-            { id: 'f2', title: '🧺 创意篮子机制', content: '将散落的碎片拖入篮子，AI 将基于你的选择，自动寻找它们之间的隐秘联系。', color: 'card-g', x: 2150, y: 1550, pin: 'pin-silver' },
-            { id: 'f3', title: '⚡ 情节微调面板', content: '一句话描述想要的感觉（"让相遇尴尬一点"），AI 实时生成符合你直觉的情节片段。', color: 'card-y', x: 2300, y: 2100, pin: 'pin-yellow' },
-            { id: 'f4', title: '📜 时间参考线', content: '贯穿左右的参考线，助你本能地按时间顺序排布“过去”与“未来”的高光时刻。', color: 'card-p', x: 1600, y: 2200, pin: 'pin-red' }
+            { id: 'f1', title: '👤 角色：李风', content: '15岁孤儿，倔强，望月宗新晋弟子。身怀不可告人的秘密。', color: 'border-l-4 border-blue-400', x: 1400, y: 1600 },
+            { id: 'f2', title: '📍 场景：望月宗山门', content: '黄昏时分，云雾缭绕，台阶上布满青苔。这是命运开始的地方。', color: 'border-l-4 border-green-400', x: 2150, y: 1550 },
+            { id: 'f3', title: '🔥 冲突：初次邂逅', content: '小瑶误会李风是闯入者，两人在山门前发生争执。', color: 'border-l-4 border-red-400', x: 2300, y: 2100 },
+            { id: 'f4', title: '👤 角色：小瑶', content: '16岁师姐，活泼开朗，实则内心孤独。擅长捉弄新人。', color: 'border-l-4 border-blue-400', x: 1800, y: 1300 },
+            { id: 'p1', title: '🌱 体验版', content: '<div class="text-3xl font-bold my-2">¥0</div><p class="text-sm opacity-80 mb-4">初探灵感之径。包含基础线索画布、有限AI生成额度，适合记录每一个稍逝的火花。</p><ul class="text-xs space-y-1 opacity-70"><li>• 50张灵感卡片额度</li><li>• 基础情节生成</li><li>• 社区灵感广场访问</li></ul>', color: 'border-t-4 border-gray-400', x: 1500, y: 2450 },
+            { id: 'p2', title: '👑 专业版', content: '<div class="text-3xl font-bold my-2">¥39</div><p class="text-sm opacity-80 mb-4">全能创世神。解锁无限AI生成、高级微调面板及多时间线管理，让故事跃然纸上。</p><ul class="text-xs space-y-1 opacity-70"><li>• 无限卡片与画布空间</li><li>• 高级AI逻辑校验</li><li>• 全格式大纲导出</li></ul>', color: 'border-t-4 border-amber-500', x: 1900, y: 2450 }
         ];
 
-        // 商业与 FAQ 卡片
-        const infoCards = [
-            { id: 'pricing', title: '🕵️ 订阅报酬', content: '<b>见习生 (Free):</b> 无限画布，每月 5 次 AI 编织。<br><b>传奇探长 (Pro):</b> ¥99/月，无限 AI 编织，导出高清故事板。', color: 'card-o', x: 1300, y: 2000, pin: 'pin-silver' },
-            { id: 'faq-1', title: 'Q: AI 会抢走我的创意吗？', content: 'A: 绝不。我们只负责“整理”你的点子。每一张卡片、每一个转折的灵魂都源于你的直觉。', color: 'card-y', x: 1800, y: 1350, pin: 'pin-yellow' },
-            { id: 'faq-2', title: 'Q: 生成的内容能导出吗？', content: 'A: 当然。支持一键导出为标准的叙事大纲或章节草稿，无缝衔接你的写作软件。', color: 'card-b', x: 2600, y: 1800, pin: 'pin-blue' }
-        ];
-
-        // 装饰性素材图片 (作为灵感参考)
         const imageFiles = [
             '微信图片_20260226115600_7_4.jpg',
             '微信图片_20260226115600_8_4.jpg',
@@ -241,57 +605,29 @@
         ];
 
         function init() {
-            // 初始化 Hero
-            const hero = document.getElementById('hero');
-            setupCardDragging(hero);
-
-            // 初始化功能卡片
-            featureCards.forEach(data => {
-                const el = createCard(data.id, data.x, data.y, data.pin, `
-                    <h3 class="text-xl font-bold mb-2 handwritten">${data.title}</h3>
-                    <p class="text-md text-gray-700 handwritten">${data.content}</p>
-                `, data.color);
-                setupCardDragging(el);
+            setupCardDragging(document.getElementById('hero'));
+            
+            // CTA 按钮跳转逻辑
+            document.getElementById('cta-btn').addEventListener('click', () => {
+                // 定位到定价卡片区域 (1700, 2550)
+                jumpTo(1700, 2550);
             });
 
-            // 初始化信息卡片
-            infoCards.forEach(data => {
-                const el = createCard(data.id, data.x, data.y, data.pin, `
-                    <h3 class="text-lg font-bold mb-2 handwritten">${data.title}</h3>
-                    <div class="text-sm text-gray-600 handwritten">${data.content}</div>
-                `, data.color);
-                setupCardDragging(el);
-            });
+            featureCards.forEach(data => setupCardDragging(createCard(data.id, data.x, data.y, 'pin-blue', `
+                <h3 class="text-xl font-bold mb-2 handwritten">${data.title}</h3>
+                <div class="handwritten">${data.content}</div>
+            `, data.color)));
 
-            // 初始化素材图片
             imageFiles.forEach((file, i) => {
                 const angle = (i / imageFiles.length) * Math.PI * 2;
-                const r = 900 + Math.random() * 200;
-                const x = 2000 + Math.cos(angle) * r;
-                const y = 2000 + Math.sin(angle) * r;
-                const pins = ['pin-red', 'pin-blue', 'pin-silver', 'pin-yellow'];
-                const el = createCard(`img-${i}`, x, y, pins[i % 4], `
-                    <img src="${file}" draggable="false" class="rounded-sm opacity-90">
-                    <p class="mt-2 text-xs text-center text-gray-400 handwritten">灵感素材 #${i + 7}</p>
-                `, 'p-3 w-64 image-card');
+                const x = 2000 + Math.cos(angle) * 850;
+                const y = 2000 + Math.sin(angle) * 850;
+                const el = createCard(`img-${i}`, x, y, 'pin-red', `
+                    <img src="${file}" draggable="false" class="rounded-sm mb-2">
+                    <p class="text-xs text-center opacity-50 handwritten">灵感素材 #${i + 7}</p>
+                `, 'p-3 w-64');
                 setupCardDragging(el);
             });
-
-            // Footer 卡片
-            const footer = createCard('footer', 2000, 2600, 'pin-silver', `
-                <div class="text-center">
-                    <h3 class="text-lg font-bold mb-2 handwritten">AI 写作伴侣</h3>
-                    <p class="text-xs text-gray-500 handwritten mb-4">帮助每一个脑内剧场落地的故事工厂</p>
-                    <div class="flex justify-center gap-4 text-xl text-gray-400 mb-4">
-                        <i class="fab fa-twitter hover:text-blue-400 transition cursor-pointer"></i>
-                        <i class="fab fa-discord hover:text-indigo-500 transition cursor-pointer"></i>
-                        <i class="fab fa-github hover:text-black transition cursor-pointer"></i>
-                    </div>
-                    <p class="text-[10px] text-gray-300">© 2026 AI Writing Companion. <br>Designed for Storytellers.</p>
-                </div>
-            `, 'card-o w-64');
-            setupCardDragging(footer);
-
             updateTransform();
         }
 
@@ -299,22 +635,19 @@
             const el = document.createElement('div');
             el.id = id;
             el.className = `clue-card ${extraClass}`;
-            el.style.top = `${y}px`;
-            el.style.left = `${x}px`;
+            el.style.top = `${y}px`; el.style.left = `${x}px`;
             el.dataset.rotation = (Math.random() - 0.5) * 15;
-            updateCardTransform(el);
             el.innerHTML = `<div class="pushpin ${pinClass}"><div class="pushpin-shine"></div></div>${html}`;
             board.appendChild(el);
+            updateCardTransform(el);
             return el;
         }
 
         function setupCardDragging(el) {
             el.addEventListener('mousedown', (e) => {
                 e.stopPropagation();
-                isDraggingCard = true;
-                activeCard = el;
-                highestZIndex++;
-                el.style.zIndex = highestZIndex;
+                isDraggingCard = true; activeCard = el;
+                highestZIndex++; el.style.zIndex = highestZIndex;
                 const rect = el.getBoundingClientRect();
                 cardOffsetX = (e.clientX - rect.left) / currentScale;
                 cardOffsetY = (e.clientY - rect.top) / currentScale;
@@ -323,11 +656,9 @@
         }
 
         function updateCardTransform(el) {
-            const rotation = el.dataset.rotation || 0;
-            const isFocused = el.classList.contains('active');
-            const scale = isFocused ? 1.18 : 1.0;
-            const finalRotation = isFocused ? 0 : rotation;
-            el.style.transform = `rotate(${finalRotation}deg) scale(${scale})`;
+            const rot = el.classList.contains('active') ? 0 : (el.dataset.rotation || 0);
+            const sc = el.classList.contains('active') ? 1.18 : 1.0;
+            el.style.transform = `rotate(${rot}deg) scale(${sc})`;
         }
 
         function updateTransform() {
@@ -335,14 +666,28 @@
             checkFocus();
         }
 
+        // 平滑跳转到指定坐标
+        function jumpTo(targetX, targetY) {
+            board.style.transition = 'transform 1s cubic-bezier(0.65, 0, 0.35, 1)';
+            currentX = 2000 - targetX;
+            currentY = 2000 - targetY;
+            currentScale = 1.0; // 跳转时恢复缩放倍率以便看清内容
+            updateTransform();
+            
+            // 动画结束后移除过渡效果，以免影响拖拽感
+            setTimeout(() => {
+                board.style.transition = 'none';
+            }, 1000);
+        }
+
         window.addEventListener('wheel', (e) => {
             e.preventDefault();
-            const zoomSpeed = 0.001;
-            currentScale = Math.min(Math.max(currentScale - e.deltaY * zoomSpeed, MIN_SCALE), MAX_SCALE);
+            currentScale = Math.min(Math.max(currentScale - e.deltaY * 0.001, MIN_SCALE), MAX_SCALE);
             updateTransform();
         }, { passive: false });
 
         window.addEventListener('mousedown', (e) => {
+            if (e.target.closest('.clue-card')) return;
             isDraggingBoard = true;
             startX = e.clientX - currentX;
             startY = e.clientY - currentY;
@@ -357,17 +702,13 @@
                 const bRect = board.getBoundingClientRect();
                 activeCard.style.left = `${(e.clientX - bRect.left) / currentScale - cardOffsetX}px`;
                 activeCard.style.top = `${(e.clientY - bRect.top) / currentScale - cardOffsetY}px`;
-                updateCardTransform(activeCard);
                 checkFocus();
             }
         });
 
         window.addEventListener('mouseup', () => {
-            if (activeCard) {
-                activeCard.style.transition = 'transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.2s ease';
-            }
-            isDraggingBoard = isDraggingCard = false;
-            activeCard = null;
+            if (activeCard) activeCard.style.transition = 'transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.2s ease';
+            isDraggingBoard = isDraggingCard = false; activeCard = null;
         });
 
         function checkFocus() {
